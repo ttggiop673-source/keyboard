@@ -1,0 +1,1473 @@
+name: Build KenzO board v6
+on:
+  push:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.7
+      - name: Build
+        run: |
+          set -eo pipefail
+          mkdir -p kb
+          cd kb
+          mkdir -p .
+          cat > settings.gradle <<'EOF_0'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "KenzoBoard"
+          include ':app'
+          EOF_0
+          mkdir -p .
+          cat > build.gradle <<'EOF_1'
+          plugins {
+              id 'com.android.application' version '8.5.2' apply false
+          }
+          EOF_1
+          mkdir -p .
+          cat > gradle.properties <<'EOF_2'
+          org.gradle.jvmargs=-Xmx2048m
+          android.useAndroidX=false
+          EOF_2
+          mkdir -p app
+          cat > app/build.gradle <<'EOF_3'
+          plugins {
+              id 'com.android.application' version '8.5.2'
+          }
+
+          android {
+              namespace 'com.kenzo.board'
+              compileSdk 34
+
+              defaultConfig {
+                  applicationId "com.kenzo.board"
+                  minSdk 21
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_1_8
+                  targetCompatibility JavaVersion.VERSION_1_8
+                  encoding 'UTF-8'
+              }
+          }
+          EOF_3
+          mkdir -p app/src/main
+          cat > app/src/main/AndroidManifest.xml <<'EOF_4'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+              <application
+                  android:allowBackup="true"
+                  android:icon="@mipmap/ic_launcher"
+                  android:label="KenzO board"
+                  android:theme="@android:style/Theme.Material.Light.NoActionBar">
+
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+
+                  <service
+                      android:name=".BoardService"
+                      android:exported="true"
+                      android:icon="@mipmap/ic_launcher"
+                      android:label="KenzO board"
+                      android:permission="android.permission.BIND_INPUT_METHOD">
+                      <intent-filter>
+                          <action android:name="android.view.InputMethod" />
+                      </intent-filter>
+                      <meta-data
+                          android:name="android.view.im"
+                          android:resource="@xml/method" />
+                  </service>
+              </application>
+          </manifest>
+          EOF_4
+          mkdir -p app/src/main/res/xml
+          cat > app/src/main/res/xml/method.xml <<'EOF_5'
+          <?xml version="1.0" encoding="utf-8"?>
+          <input-method xmlns:android="http://schemas.android.com/apk/res/android"
+              android:settingsActivity="com.kenzo.board.MainActivity" />
+          EOF_5
+          mkdir -p app/src/main/res/values
+          cat > app/src/main/res/values/strings.xml <<'EOF_6'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <string name="app_name">KenzO board</string>
+          </resources>
+          EOF_6
+          mkdir -p app/src/main/java/com/kenzo/board
+          cat > app/src/main/java/com/kenzo/board/MainActivity.java <<'EOF_7'
+          package com.kenzo.board;
+
+          import android.app.Activity;
+          import android.content.Context;
+          import android.content.Intent;
+          import android.graphics.Color;
+          import android.os.Bundle;
+          import android.provider.Settings;
+          import android.view.View;
+          import android.view.inputmethod.InputMethodManager;
+          import android.widget.Button;
+          import android.widget.EditText;
+          import android.widget.LinearLayout;
+          import android.widget.ScrollView;
+          import android.widget.TextView;
+
+          public class MainActivity extends Activity {
+
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+
+                  int pad = dp(20);
+                  LinearLayout root = new LinearLayout(this);
+                  root.setOrientation(LinearLayout.VERTICAL);
+                  root.setPadding(pad, pad, pad, pad);
+                  root.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
+
+                  TextView title = new TextView(this);
+                  title.setText("KenzO board");
+                  title.setTextSize(28);
+                  title.setTextColor(Color.BLACK);
+                  root.addView(title);
+
+                  TextView info = new TextView(this);
+                  info.setText("\u0643\u0644 \u0627\u0644\u0625\u0639\u062f\u0627\u062f\u0627\u062a \u062f\u0627\u062e\u0644 \u0627\u0644\u0643\u064a\u0628\u0648\u0631\u062f \u0646\u0641\u0633\u0647: \u062f\u0648\u0633 \u0639\u0644\u0649 \u0639\u0644\u0627\u0645\u0629 \u2699 \u0627\u0644\u0644\u064a \u0628\u0627\u0644\u0635\u0641 \u0627\u0644\u0623\u0633\u0641\u0644.");
+                  info.setTextSize(16);
+                  info.setPadding(0, dp(12), 0, dp(16));
+                  root.addView(info);
+
+                  Button enable = new Button(this);
+                  enable.setText("1) \u062a\u0641\u0639\u064a\u0644 \u0627\u0644\u0643\u064a\u0628\u0648\u0631\u062f");
+                  enable.setOnClickListener(new View.OnClickListener() {
+                      @Override
+                      public void onClick(View v) {
+                          startActivity(new Intent(Settings.ACTION_INPUT_METHOD_SETTINGS));
+                      }
+                  });
+                  root.addView(enable);
+
+                  Button pick = new Button(this);
+                  pick.setText("2) \u0627\u062e\u062a\u064a\u0627\u0631 \u0627\u0644\u0643\u064a\u0628\u0648\u0631\u062f");
+                  pick.setOnClickListener(new View.OnClickListener() {
+                      @Override
+                      public void onClick(View v) {
+                          InputMethodManager imm =
+                                  (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+                          if (imm != null) imm.showInputMethodPicker();
+                      }
+                  });
+                  root.addView(pick);
+
+                  EditText test = new EditText(this);
+                  test.setHint("\u062c\u0631\u0651\u0628 \u0627\u0644\u0643\u062a\u0627\u0628\u0629 \u0647\u0646\u0627");
+                  test.setPadding(0, dp(24), 0, dp(12));
+                  root.addView(test);
+
+                  ScrollView scroll = new ScrollView(this);
+                  scroll.addView(root);
+                  setContentView(scroll);
+              }
+
+              private int dp(int v) {
+                  return (int) (v * getResources().getDisplayMetrics().density + 0.5f);
+              }
+          }
+          EOF_7
+          mkdir -p app/src/main/java/com/kenzo/board
+          cat > app/src/main/java/com/kenzo/board/BoardService.java <<'EOF_8'
+          package com.kenzo.board;
+
+          import android.content.SharedPreferences;
+          import android.graphics.drawable.Drawable;
+          import android.graphics.drawable.GradientDrawable;
+          import android.graphics.drawable.LayerDrawable;
+          import android.inputmethodservice.InputMethodService;
+          import android.os.Build;
+          import android.os.Handler;
+          import android.os.Looper;
+          import android.os.SystemClock;
+          import android.text.InputType;
+          import android.util.TypedValue;
+          import android.view.Gravity;
+          import android.view.HapticFeedbackConstants;
+          import android.view.KeyEvent;
+          import android.view.MotionEvent;
+          import android.view.View;
+          import android.view.ViewGroup;
+          import android.view.inputmethod.EditorInfo;
+          import android.view.inputmethod.InputConnection;
+          import android.widget.FrameLayout;
+          import android.widget.LinearLayout;
+          import android.widget.ScrollView;
+          import android.widget.TextView;
+
+          public class BoardService extends InputMethodService {
+
+              static final String PREFS = "kenzoboard";
+              static final String K_AUTO = "auto";
+              static final String K_DIGITS = "digits";
+              static final String K_SPLIT = "split";
+              static final String K_HAPTIC = "haptic";
+              static final String K_LANG = "lang";
+              static final String K_AUTOL = "autol";
+              static final String K_LETTERS = "letters";
+              static final String K_AUTOP = "autop";
+              static final String K_PAUSE = "pause";
+
+              static final int MAX_DIGITS = 101;
+              static final int MAX_LETTERS = 40;
+
+              private static final int MATCH = ViewGroup.LayoutParams.MATCH_PARENT;
+
+              private static final int C_BG = 0xFF0D0D0D;
+              private static final int C_KEY = 0xFF1E1E20;
+              private static final int C_SPECIAL = 0xFF2A2A2E;
+              private static final int C_PRESSED = 0xFF3E3E44;
+              private static final int C_LINE = 0xFF124A70;
+              private static final int C_ON = 0xFF1E9E45;
+              private static final int C_TEXT = 0xFFFFFFFF;
+              private static final int C_DIM = 0xFF9A9AA0;
+
+              private static final int PAGE_AR = 0;
+              private static final int PAGE_AR2 = 1;
+              private static final int PAGE_EN = 2;
+              private static final int PAGE_NUM = 3;
+              private static final int PAGE_SYM = 4;
+
+              private static final int ROW_DP = 50;
+              private static final int GRID_ROW_DP = 38;
+
+              // \u0627\u0633\u0645 \u0623\u0643\u0628\u0631 \u0645\u0631\u062a\u0628\u0629 \u0644\u0647\u0630\u0627 \u0627\u0644\u0639\u062f\u062f \u0645\u0646 \u0627\u0644\u062e\u0627\u0646\u0627\u062a
+              static final String[] NAMES = {
+                      "\u0648\u062d\u062f\u0627\u062a", "\u0623\u0644\u0641", "\u0645\u0644\u064a\u0648\u0646", "\u0645\u0644\u064a\u0627\u0631", "\u062a\u0631\u0644\u064a\u0648\u0646", "\u0643\u0648\u0627\u062f\u0631\u064a\u0644\u064a\u0648\u0646",
+                      "\u0643\u0648\u064a\u0646\u062a\u0644\u064a\u0648\u0646", "\u0633\u0643\u0633\u062a\u0644\u064a\u0648\u0646", "\u0633\u0628\u062a\u0644\u064a\u0648\u0646", "\u0623\u0648\u0643\u062a\u0644\u064a\u0648\u0646", "\u0646\u0648\u0646\u0644\u064a\u0648\u0646", "\u062f\u064a\u0633\u064a\u0644\u064a\u0648\u0646",
+                      "\u0623\u0646\u062f\u064a\u0633\u064a\u0644\u064a\u0648\u0646", "\u062f\u0648\u062f\u064a\u0633\u064a\u0644\u064a\u0648\u0646", "\u062a\u0631\u064a\u062f\u064a\u0633\u064a\u0644\u064a\u0648\u0646", "\u0643\u0648\u0627\u062a\u0648\u0631\u062f\u0633\u064a\u0644\u064a\u0648\u0646", "\u0643\u0648\u064a\u0646\u062f\u064a\u0633\u064a\u0644\u064a\u0648\u0646", "\u0633\u0643\u0633\u062f\u064a\u0633\u064a\u0644\u064a\u0648\u0646",
+                      "\u0633\u0628\u062a\u0646\u062f\u064a\u0633\u064a\u0644\u064a\u0648\u0646", "\u0623\u0648\u0643\u062a\u0648\u062f\u064a\u0633\u064a\u0644\u064a\u0648\u0646", "\u0646\u0648\u0641\u0645\u062f\u064a\u0633\u064a\u0644\u064a\u0648\u0646", "\u0641\u064a\u062c\u0646\u062a\u0644\u064a\u0648\u0646", "\u0623\u0646\u0641\u064a\u062c\u0646\u062a\u0644\u064a\u0648\u0646", "\u062f\u0648\u0641\u064a\u062c\u0646\u062a\u0644\u064a\u0648\u0646",
+                      "\u062a\u0631\u064a\u0641\u064a\u062c\u0646\u062a\u0644\u064a\u0648\u0646", "\u0643\u0648\u0627\u062a\u0648\u0631\u0641\u064a\u062c\u0646\u062a\u0644\u064a\u0648\u0646", "\u0643\u0648\u064a\u0646\u0641\u064a\u062c\u0646\u062a\u0644\u064a\u0648\u0646", "\u0633\u0643\u0633\u0641\u064a\u062c\u0646\u062a\u0644\u064a\u0648\u0646", "\u0633\u0628\u062a\u0646\u0641\u064a\u062c\u0646\u062a\u0644\u064a\u0648\u0646", "\u0623\u0648\u0643\u062a\u0648\u0641\u064a\u062c\u0646\u062a\u0644\u064a\u0648\u0646",
+                      "\u0646\u0648\u0641\u0645\u0641\u064a\u062c\u0646\u062a\u0644\u064a\u0648\u0646", "\u062a\u0631\u064a\u062c\u0646\u062a\u0644\u064a\u0648\u0646", "\u0623\u0646\u062a\u0631\u064a\u062c\u0646\u062a\u0644\u064a\u0648\u0646", "\u062f\u0648\u062a\u0631\u064a\u062c\u0646\u062a\u0644\u064a\u0648\u0646"
+              };
+
+              static String unitName(int digits) {
+                  if (digits >= MAX_DIGITS) return "\u062c\u0648\u062c\u0644";
+                  int g = (digits + 2) / 3;
+                  if (g < 1) g = 1;
+                  if (g > NAMES.length) g = NAMES.length;
+                  return NAMES[g - 1];
+              }
+
+              private SharedPreferences prefs;
+              private final Handler handler = new Handler(Looper.getMainLooper());
+              private LinearLayout root;
+              private FrameLayout content;
+              private TextView status;
+
+              private boolean auto;
+              private boolean autoLetters;
+              private boolean autoPause;
+              private int pauseMs = 500;
+              private int letters = 5;
+              private int lastKind;   // 0 \u0644\u0627 \u0634\u064a \u060c 1 \u0631\u0642\u0645 \u060c 2 \u062d\u0631\u0641
+              private boolean split;
+              private boolean haptic;
+              private int digits = 10;
+              private int lang;      // 0 \u0639\u0631\u0628\u064a \u060c 1 \u0625\u0646\u0643\u0644\u064a\u0632\u064a
+              private int page = PAGE_AR;
+              private int shift;     // \u0644\u0644\u0625\u0646\u0643\u0644\u064a\u0632\u064a: 0 \u0639\u0627\u062f\u064a \u060c 1 \u062d\u0631\u0641 \u0643\u0628\u064a\u0631 \u0645\u0631\u0629 \u0648\u062d\u062f\u0629 \u060c 2 \u0643\u0644\u0647\u0627 \u0643\u0628\u064a\u0631\u0629
+              private boolean panelOpen;
+              private int typed;
+              private long lastShiftTap;
+
+              private final Runnable sendRunnable = new Runnable() {
+                  @Override
+                  public void run() {
+                      sendNow();
+                  }
+              };
+
+              private final Runnable pauseRunnable = new Runnable() {
+                  @Override
+                  public void run() {
+                      typed = 0;
+                      lastKind = 0;
+                      sendNow();
+                      updateStatus();
+                  }
+              };
+
+              private final Runnable renderRunnable = new Runnable() {
+                  @Override
+                  public void run() {
+                      render();
+                  }
+              };
+
+              private final Runnable repeatRunnable = new Runnable() {
+                  @Override
+                  public void run() {
+                      deleteBack();
+                      handler.postDelayed(this, 45);
+                  }
+              };
+
+              // ------------------------------------------------------------ \u062f\u0648\u0631\u0629 \u0627\u0644\u062d\u064a\u0627\u0629
+
+              @Override
+              public void onCreate() {
+                  super.onCreate();
+                  prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+                  auto = prefs.getBoolean(K_AUTO, true);
+                  autoLetters = prefs.getBoolean(K_AUTOL, false);
+                  letters = clampLetters(prefs.getInt(K_LETTERS, 5));
+                  autoPause = false;
+                  pauseMs = clampPause(prefs.getInt(K_PAUSE, 500));
+                  split = prefs.getBoolean(K_SPLIT, false);
+                  haptic = prefs.getBoolean(K_HAPTIC, false);
+                  digits = clampDigits(prefs.getInt(K_DIGITS, 10));
+                  lang = prefs.getInt(K_LANG, 0) == 1 ? 1 : 0;
+                  page = lang == 1 ? PAGE_EN : PAGE_AR;
+              }
+
+              @Override
+              public View onCreateInputView() {
+                  root = new LinearLayout(this);
+                  root.setOrientation(LinearLayout.VERTICAL);
+                  root.setBackgroundColor(C_BG);
+                  root.setLayoutDirection(View.LAYOUT_DIRECTION_LTR);
+                  root.setPadding(dp(3), dp(2), dp(3), dp(4));
+
+                  status = new TextView(this);
+                  status.setGravity(Gravity.CENTER);
+                  status.setTextColor(C_DIM);
+                  status.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+                  status.setIncludeFontPadding(false);
+                  root.addView(status, new LinearLayout.LayoutParams(MATCH, dp(22)));
+
+                  content = new FrameLayout(this);
+                  root.addView(content, new LinearLayout.LayoutParams(MATCH, dp(ROW_DP * 5)));
+
+                  render();
+                  return root;
+              }
+
+              @Override
+              public void onStartInputView(EditorInfo info, boolean restarting) {
+                  super.onStartInputView(info, restarting);
+                  if (!restarting) {
+                      typed = 0;
+                      lastKind = 0;
+                      panelOpen = false;
+                      shift = 0;
+                      if (info != null) {
+                          int cls = info.inputType & InputType.TYPE_MASK_CLASS;
+                          if (cls == InputType.TYPE_CLASS_NUMBER || cls == InputType.TYPE_CLASS_PHONE) {
+                              page = PAGE_NUM;
+                          }
+                      }
+                      render();
+                  }
+              }
+
+              @Override
+              public void onFinishInputView(boolean finishingInput) {
+                  super.onFinishInputView(finishingInput);
+                  stopRepeat();
+                  handler.removeCallbacks(sendRunnable);
+                  handler.removeCallbacks(pauseRunnable);
+              }
+
+              @Override
+              public boolean onEvaluateFullscreenMode() {
+                  return false;
+              }
+
+              // ------------------------------------------------------------ \u0627\u0644\u0631\u0633\u0645
+
+              private void postRender() {
+                  handler.post(renderRunnable);
+              }
+
+              private void render() {
+                  if (content == null) return;
+                  stopRepeat();
+                  ViewGroup.LayoutParams clp = content.getLayoutParams();
+                  if (clp != null) {
+                      clp.height = dp(page == PAGE_NUM && !panelOpen ? ROW_DP * 5 + 60 : ROW_DP * 5);
+                      content.setLayoutParams(clp);
+                  }
+                  content.removeAllViews();
+                  View v = panelOpen ? buildPanel() : buildKeys();
+                  content.addView(v, new FrameLayout.LayoutParams(MATCH, MATCH));
+                  updateStatus();
+              }
+
+              private void updateStatus() {
+                  if (status == null) return;
+                  StringBuilder sb = new StringBuilder("KenzO board");
+                  if (auto) {
+                      sb.append("   \u2022   \u0623\u0631\u0642\u0627\u0645 ").append(lastKind == 1 ? typed : 0)
+                              .append('/').append(digits).append("  ").append(unitName(digits));
+                  }
+                  if (autoLetters) {
+                      sb.append("   \u2022   \u062d\u0631\u0648\u0641 ").append(lastKind == 2 ? typed : 0)
+                              .append('/').append(letters);
+                  }
+                  if (split) sb.append("   \u2022   \u062a\u0641\u0643\u064a\u0643");
+                  status.setText(sb.toString());
+              }
+
+              // ------------------------------------------------------------ \u0644\u0648\u062d\u0629 \u0627\u0644\u0623\u0632\u0631\u0627\u0631
+
+              private static String[] row(String s) {
+                  return s.split(" ");
+              }
+
+              private boolean flatPage() {
+                  return page == PAGE_AR || page == PAGE_AR2 || page == PAGE_EN;
+              }
+
+              private boolean hasToolbar() {
+                  return true;
+              }
+
+              private String[] toolbarRow() {
+                  if (page == PAGE_NUM) return new String[]{"@N9", "@N10", "@N11", "@N12", "@N13"};
+                  if (page == PAGE_SYM) return new String[]{"@PANEL", "@LANG"};
+                  return new String[]{"@PANEL", "@LANG", "@SHIFT", "@W3", "@W4", "@W5", "@W6", "@W7"};
+              }
+
+              private String[][] rowsFor() {
+                  switch (page) {
+                      case PAGE_AR2:
+                          return new String[][]{
+                                  row("\u0623 \u0625 \u0622 \u0621 \u0624 \u0626 \u067e \u0686 \u06a4 \u06af \u0698"),
+                                  row("\u064e \u064f \u0650 \u064b \u064c \u064d \u0651 \u0652 \u0640 \u060c \u061b"),
+                                  row("\u0644\u0627 \u061f ! , : \" ' ( ) - @DEL")
+                          };
+                      case PAGE_EN:
+                          return new String[][]{
+                                  up(row("q w e r t y u i o p")),
+                                  up(new String[]{"", "a", "s", "d", "f", "g", "h", "j", "k", "l", ""}),
+                                  up(new String[]{"", "", "z", "x", "c", "v", "b", "n", "m", "@DEL"})
+                          };
+                      case PAGE_NUM:
+                          return new String[][]{
+                                  {"1", "2", "3", "."},
+                                  {"4", "5", "6", ","},
+                                  {"7", "8", "9", "-"},
+                                  {"@PANEL", "0", "@DEL", "@SYM"}
+                          };
+                      case PAGE_SYM:
+                          return new String[][]{
+                                  row("! @ # $ % ^ & * ( )"),
+                                  row("- _ = + / \\ | ~ ' \""),
+                                  row(": ; , . ? < > \u00ab \u00bb @DEL")
+                          };
+                      case PAGE_AR:
+                      default:
+                          return new String[][]{
+                                  row("\u0636 \u0635 \u062b \u0642 \u0641 \u063a \u0639 \u0647 \u062e \u062d \u062c"),
+                                  row("\u0634 \u0633 \u064a \u0628 \u0644 \u0627 \u062a \u0646 \u0645 \u0643 \u0637"),
+                                  row("\u0630 \u0621 \u0624 \u0631 \u0649 \u0629 \u0648 \u0632 \u0638 \u062f @DEL")
+                          };
+                  }
+              }
+
+              private String[] up(String[] in) {
+                  if (shift == 0) return in;
+                  String[] out = new String[in.length];
+                  for (int i = 0; i < in.length; i++) {
+                      out[i] = isSpecial(in[i]) ? in[i] : in[i].toUpperCase();
+                  }
+                  return out;
+              }
+
+              private String[] bottomRow() {
+                  String comma = lang == 0 ? "\u060c" : ",";
+                  boolean alt = page == PAGE_NUM || page == PAGE_SYM;
+                  if (page == PAGE_NUM) return new String[]{"@ABC", "@ENTER"};
+                  return new String[]{alt ? "@ABC" : "@NUM", comma, "@SPACE", ".", "@ENTER"};
+              }
+
+              private View buildKeys() {
+                  LinearLayout col = new LinearLayout(this);
+                  col.setOrientation(LinearLayout.VERTICAL);
+                  if (hasToolbar()) {
+                      col.addView(buildRow(toolbarRow(), true), new LinearLayout.LayoutParams(MATCH, 0, 0.8f));
+                  }
+                  String[][] rows = rowsFor();
+                  for (String[] r : rows) {
+                      col.addView(buildRow(r, false), new LinearLayout.LayoutParams(MATCH, 0, 1f));
+                  }
+                  col.addView(buildRow(bottomRow(), false),
+                          new LinearLayout.LayoutParams(MATCH, 0, page == PAGE_NUM ? 1.5f : 1f));
+                  return col;
+              }
+
+              private LinearLayout buildRow(String[] specs, boolean toolbar) {
+                  LinearLayout line = new LinearLayout(this);
+                  line.setOrientation(LinearLayout.HORIZONTAL);
+                  line.setMotionEventSplittingEnabled(true);
+                  for (String spec : specs) {
+                      if (spec.length() == 0) {
+                          line.addView(new View(this), new LinearLayout.LayoutParams(0, MATCH, 0.5f));
+                          continue;
+                      }
+                      LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, MATCH, weightOf(spec));
+                      lp.setMargins(dp(1), dp(1), dp(1), dp(1));
+                      line.addView(makeKey(spec, toolbar), lp);
+                  }
+                  return line;
+              }
+
+              private static boolean isChip(String spec) {
+                  return spec.matches("@[NW][0-9]+");
+              }
+
+              private boolean chipOn(String spec) {
+                  int n = Integer.parseInt(spec.substring(2));
+                  if (spec.charAt(1) == 'N') return auto && digits == n;
+                  return autoLetters && letters == n;
+              }
+
+              private void chipTap(String spec) {
+                  int n = Integer.parseInt(spec.substring(2));
+                  if (spec.charAt(1) == 'N') {
+                      if (auto && digits == n) {
+                          auto = false;
+                      } else {
+                          auto = true;
+                          setDigits(n);
+                      }
+                      prefs.edit().putBoolean(K_AUTO, auto).apply();
+                  } else {
+                      if (autoLetters && letters == n) {
+                          autoLetters = false;
+                      } else {
+                          autoLetters = true;
+                          setLetters(n);
+                      }
+                      prefs.edit().putBoolean(K_AUTOL, autoLetters).apply();
+                  }
+                  typed = 0;
+                  lastKind = 0;
+                  postRender();
+              }
+
+              private static boolean isSpecial(String spec) {
+                  return spec.length() > 1 && spec.charAt(0) == '@';
+              }
+
+              private float weightOf(String spec) {
+                  if (!isSpecial(spec)) return 1f;
+                  switch (spec) {
+                      case "@DEL":
+                          return page == PAGE_EN ? 2f : 1f;
+                      case "@SPACE":
+                          return 5f;
+                      case "@ENTER":
+                          return page == PAGE_NUM ? 5f : 1.6f;
+                      case "@NUM":
+                      case "@ABC":
+                          return 1.3f;
+                      default:
+                          return 1f;
+                  }
+              }
+
+              private String labelOf(String spec) {
+                  if (!isSpecial(spec)) {
+                      if (spec.length() == 1 && Character.getType(spec.charAt(0)) == Character.NON_SPACING_MARK) {
+                          return "\u0640" + spec;
+                      }
+                      return spec;
+                  }
+                  if (isChip(spec)) return spec.substring(2);
+                  switch (spec) {
+                      case "@DEL":
+                          return "\u232b";
+                      case "@SHIFT":
+                          if (lang == 1) return "\u21e7";
+                          return page == PAGE_AR2 ? "\u0623\u0628" : "\u0623 \u067e";
+                      case "@SPACE":
+                          return lang == 0 ? "\u0627\u0644\u0639\u0631\u0628\u064a\u0629" : "English";
+                      case "@ENTER":
+                          return page == PAGE_NUM ? "\u0625\u0631\u0633\u0627\u0644  \u21b5" : "\u21b5";
+                      case "@PANEL":
+                          return "\u2699";
+                      case "@NUM":
+                          return "123";
+                      case "@ABC":
+                          return lang == 0 ? "\u0623\u0628" : "ABC";
+                      case "@LANG":
+                          return lang == 0 ? "EN" : "\u0639";
+                      case "@SYM":
+                          return "#+=";
+                      default:
+                          return spec;
+                  }
+              }
+
+              private GradientDrawable rounded(int color) {
+                  GradientDrawable g = new GradientDrawable();
+                  g.setColor(color);
+                  g.setCornerRadius(dp(6));
+                  return g;
+              }
+
+              private Drawable makeBg(int color, boolean underline) {
+                  GradientDrawable g = rounded(color);
+                  if (underline && Build.VERSION.SDK_INT >= 23) {
+                      GradientDrawable line = new GradientDrawable();
+                      line.setColor(C_LINE);
+                      LayerDrawable ld = new LayerDrawable(new Drawable[]{g, line});
+                      ld.setLayerGravity(1, Gravity.BOTTOM);
+                      ld.setLayerHeight(1, dp(2));
+                      ld.setLayerInset(1, dp(3), 0, dp(3), 0);
+                      return ld;
+                  }
+                  return g;
+              }
+
+              private TextView makeKey(final String spec, boolean toolbar) {
+                  TextView tv = new TextView(this);
+                  tv.setText(labelOf(spec));
+                  tv.setGravity(Gravity.CENTER);
+                  tv.setTextColor(C_TEXT);
+                  tv.setIncludeFontPadding(false);
+                  boolean special = isSpecial(spec);
+                  boolean flat = flatPage() || toolbar;
+                  float size;
+                  if (toolbar) {
+                      size = 20;
+                  } else if (special) {
+                      size = spec.equals("@PANEL") ? 22 : 17;
+                  } else if (page == PAGE_NUM) {
+                      size = 26;
+                  } else if (page == PAGE_SYM) {
+                      size = 22;
+                  } else {
+                      size = page == PAGE_EN ? 26 : 28;
+                  }
+                  int base = flat ? C_BG : (special ? C_SPECIAL : C_KEY);
+                  if (spec.equals("@SPACE")) {
+                      size = 13;
+                      tv.setTextColor(C_DIM);
+                  }
+                  if (spec.equals("@SHIFT")) {
+                      boolean active = (page == PAGE_EN && shift > 0) || page == PAGE_AR2;
+                      if (active) base = C_ON;
+                  }
+                  if (isChip(spec)) {
+                      size = 16;
+                      base = chipOn(spec) ? C_ON : C_SPECIAL;
+                      flat = false;
+                  }
+                  tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, size);
+
+                  boolean underline = flatPage() && !special && !toolbar;
+                  final Drawable normal = makeBg(base, underline);
+                  final Drawable pressed = makeBg(C_PRESSED, underline);
+                  tv.setBackground(normal);
+                  tv.setOnTouchListener(new View.OnTouchListener() {
+                      @Override
+                      public boolean onTouch(View v, MotionEvent e) {
+                          switch (e.getActionMasked()) {
+                              case MotionEvent.ACTION_DOWN:
+                                  v.setBackground(pressed);
+                                  onKey(spec, v);
+                                  return true;
+                              case MotionEvent.ACTION_UP:
+                              case MotionEvent.ACTION_CANCEL:
+                                  v.setBackground(normal);
+                                  if (spec.equals("@DEL")) stopRepeat();
+                                  return true;
+                              default:
+                                  return true;
+                          }
+                      }
+                  });
+                  return tv;
+              }
+
+              // ------------------------------------------------------------ \u0627\u0644\u0636\u063a\u0637 \u0639\u0644\u0649 \u0627\u0644\u0623\u0632\u0631\u0627\u0631
+
+              private void onKey(String spec, View v) {
+                  if (haptic) v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+                  if (!isSpecial(spec)) {
+                      typeText(spec);
+                      return;
+                  }
+                  if (isChip(spec)) {
+                      chipTap(spec);
+                      return;
+                  }
+                  switch (spec) {
+                      case "@DEL":
+                          deleteBack();
+                          handler.removeCallbacks(repeatRunnable);
+                          handler.postDelayed(repeatRunnable, 380);
+                          break;
+                      case "@SPACE":
+                          commit(" ");
+                          handler.removeCallbacks(pauseRunnable);
+                          typed = 0;
+                          lastKind = 0;
+                          updateStatus();
+                          break;
+                      case "@ENTER":
+                          handler.removeCallbacks(pauseRunnable);
+                          typed = 0;
+                          lastKind = 0;
+                          sendNow();
+                          updateStatus();
+                          break;
+                      case "@SHIFT":
+                          if (page == PAGE_EN) {
+                              long now = SystemClock.uptimeMillis();
+                              if (shift == 2) {
+                                  shift = 0;
+                              } else if (shift == 1 && now - lastShiftTap < 350) {
+                                  shift = 2;
+                              } else {
+                                  shift = (shift == 0) ? 1 : 0;
+                              }
+                              lastShiftTap = now;
+                          } else {
+                              page = (page == PAGE_AR) ? PAGE_AR2 : PAGE_AR;
+                          }
+                          postRender();
+                          break;
+                      case "@NUM":
+                          page = PAGE_NUM;
+                          postRender();
+                          break;
+                      case "@SYM":
+                          page = PAGE_SYM;
+                          postRender();
+                          break;
+                      case "@ABC":
+                          shift = 0;
+                          page = lang == 1 ? PAGE_EN : PAGE_AR;
+                          postRender();
+                          break;
+                      case "@LANG":
+                          lang = 1 - lang;
+                          prefs.edit().putInt(K_LANG, lang).apply();
+                          shift = 0;
+                          page = lang == 1 ? PAGE_EN : PAGE_AR;
+                          postRender();
+                          break;
+                      case "@PANEL":
+                          handler.removeCallbacks(pauseRunnable);
+                          panelOpen = true;
+                          postRender();
+                          break;
+                      default:
+                          break;
+                  }
+              }
+
+              private void commit(String s) {
+                  InputConnection ic = getCurrentInputConnection();
+                  if (ic != null) ic.commitText(s, 1);
+              }
+
+              private void typeText(String s) {
+                  InputConnection ic = getCurrentInputConnection();
+                  if (ic == null) return;
+                  char c = s.charAt(0);
+                  if (s.length() == 1 && Character.getType(c) == Character.NON_SPACING_MARK) {
+                      ic.commitText(s, 1);   // \u0627\u0644\u062d\u0631\u0643\u0627\u062a \u0645\u0627 \u062a\u0646\u062d\u0633\u0628
+                      return;
+                  }
+                  boolean isDigit = s.length() == 1
+                          && ((c >= '0' && c <= '9') || (c >= '\u0660' && c <= '\u0669'));
+                  boolean isLetter = !isDigit && Character.isLetter(c);
+                  int kind = isDigit ? 1 : (isLetter ? 2 : 0);
+
+                  if (kind == 2 && split) {
+                      ic.commitText(s + " ", 1);
+                  } else {
+                      ic.commitText(s, 1);
+                  }
+
+                  handler.removeCallbacks(pauseRunnable);
+                  if (kind != lastKind) typed = 0;
+                  lastKind = kind;
+                  if (kind == 0) {
+                      typed = 0;
+                  } else {
+                      typed++;
+                      int limit = (kind == 1) ? digits : letters;
+                      boolean on = (kind == 1) ? auto : autoLetters;
+                      if (typed >= limit) {
+                          typed = 0;
+                          if (on) {
+                              sendNow();
+                          }
+                      }
+                  }
+                  if (page == PAGE_EN && shift == 1) {
+                      shift = 0;
+                      postRender();
+                  }
+                  updateStatus();
+              }
+
+              private void deleteBack() {
+                  InputConnection ic = getCurrentInputConnection();
+                  if (ic == null) return;
+                  handler.removeCallbacks(pauseRunnable);
+                  boolean done = false;
+                  if (split) {
+                      CharSequence before = ic.getTextBeforeCursor(2, 0);
+                      if (before != null && before.length() >= 2
+                              && before.charAt(before.length() - 1) == ' '
+                              && before.charAt(before.length() - 2) != ' ') {
+                          ic.deleteSurroundingText(2, 0);
+                          done = true;
+                      }
+                  }
+                  if (!done) sendDownUpKeyEvents(KeyEvent.KEYCODE_DEL);
+                  if (typed > 0) typed--;
+                  updateStatus();
+              }
+
+              private void stopRepeat() {
+                  handler.removeCallbacks(repeatRunnable);
+              }
+
+              private void sendNow() {
+                  InputConnection ic = getCurrentInputConnection();
+                  if (ic == null) return;
+                  if (!sendDefaultEditorAction(true)) {
+                      sendDownUpKeyEvents(KeyEvent.KEYCODE_ENTER);
+                  }
+              }
+
+              // \u064a\u0641\u0643\u0643 \u0622\u062e\u0631 \u0643\u0644\u0645\u0629 \u0642\u0628\u0644 \u0627\u0644\u0645\u0624\u0634\u0631: \u0633\u0644\u0627\u0645 -> \u0633 \u0644 \u0627 \u0645
+              private void splitLastWord() {
+                  InputConnection ic = getCurrentInputConnection();
+                  if (ic == null) return;
+                  CharSequence cs = ic.getTextBeforeCursor(80, 0);
+                  if (cs == null) return;
+                  String s = cs.toString();
+                  int end = s.length();
+                  int e = end;
+                  while (e > 0 && Character.isWhitespace(s.charAt(e - 1))) e--;
+                  int st = e;
+                  while (st > 0 && !Character.isWhitespace(s.charAt(st - 1))) st--;
+                  if (e - st < 2) return;
+                  String word = s.substring(st, e);
+                  String trailing = s.substring(e);
+                  StringBuilder sb = new StringBuilder();
+                  int i = 0;
+                  while (i < word.length()) {
+                      int cp = word.codePointAt(i);
+                      if (sb.length() > 0) sb.append(' ');
+                      sb.appendCodePoint(cp);
+                      i += Character.charCount(cp);
+                  }
+                  sb.append(trailing);
+                  ic.deleteSurroundingText(end - st, 0);
+                  ic.commitText(sb.toString(), 1);
+              }
+
+              // ------------------------------------------------------------ \u0644\u0648\u062d\u0629 \u0627\u0644\u0625\u0639\u062f\u0627\u062f\u0627\u062a (\u062f\u0627\u062e\u0644 \u0627\u0644\u0643\u064a\u0628\u0648\u0631\u062f)
+
+              private int clampDigits(int d) {
+                  if (d < 1) return 1;
+                  if (d > MAX_DIGITS) return MAX_DIGITS;
+                  return d;
+              }
+
+              private int clampPause(int d) {
+                  if (d < 200) return 200;
+                  if (d > 3000) return 3000;
+                  return d;
+              }
+
+              private View.OnClickListener pauseStepper(final int delta) {
+                  return new View.OnClickListener() {
+                      @Override
+                      public void onClick(View v) {
+                          pauseMs = clampPause(pauseMs + delta);
+                          prefs.edit().putInt(K_PAUSE, pauseMs).apply();
+                          postRender();
+                      }
+                  };
+              }
+
+              private View.OnClickListener flip(final String key) {
+                  return new View.OnClickListener() {
+                      @Override
+                      public void onClick(View v) {
+                          switch (key) {
+                              case K_AUTO:
+                                  auto = !auto;
+                                  prefs.edit().putBoolean(K_AUTO, auto).apply();
+                                  break;
+                              case K_AUTOL:
+                                  autoLetters = !autoLetters;
+                                  prefs.edit().putBoolean(K_AUTOL, autoLetters).apply();
+                                  break;
+                              case K_AUTOP:
+                                  autoPause = !autoPause;
+                                  prefs.edit().putBoolean(K_AUTOP, autoPause).apply();
+                                  break;
+                              case K_SPLIT:
+                                  split = !split;
+                                  prefs.edit().putBoolean(K_SPLIT, split).apply();
+                                  break;
+                              case K_HAPTIC:
+                                  haptic = !haptic;
+                                  prefs.edit().putBoolean(K_HAPTIC, haptic).apply();
+                                  break;
+                              default:
+                                  break;
+                          }
+                          typed = 0;
+                          lastKind = 0;
+                          handler.removeCallbacks(pauseRunnable);
+                          postRender();
+                      }
+                  };
+              }
+
+              private int clampLetters(int d) {
+                  if (d < 1) return 1;
+                  if (d > MAX_LETTERS) return MAX_LETTERS;
+                  return d;
+              }
+
+              private void setLetters(int d) {
+                  letters = clampLetters(d);
+                  typed = 0;
+                  prefs.edit().putInt(K_LETTERS, letters).apply();
+              }
+
+              private View.OnClickListener letterStepper(final int delta) {
+                  return new View.OnClickListener() {
+                      @Override
+                      public void onClick(View v) {
+                          setLetters(letters + delta);
+                          postRender();
+                      }
+                  };
+              }
+
+              private void setDigits(int d) {
+                  digits = clampDigits(d);
+                  typed = 0;
+                  prefs.edit().putInt(K_DIGITS, digits).apply();
+              }
+
+              private LinearLayout hrow() {
+                  LinearLayout l = new LinearLayout(this);
+                  l.setOrientation(LinearLayout.HORIZONTAL);
+                  return l;
+              }
+
+              private LinearLayout.LayoutParams cellParams(int w, int h, float weight) {
+                  LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(w, h, weight);
+                  lp.setMargins(dp(2), dp(2), dp(2), dp(2));
+                  return lp;
+              }
+
+              private TextView cell(String text, int bg, float sp, View.OnClickListener l) {
+                  TextView t = new TextView(this);
+                  t.setText(text);
+                  t.setGravity(Gravity.CENTER);
+                  t.setTextColor(C_TEXT);
+                  t.setTextSize(TypedValue.COMPLEX_UNIT_SP, sp);
+                  t.setIncludeFontPadding(false);
+                  t.setPadding(dp(4), 0, dp(4), 0);
+                  t.setBackground(rounded(bg));
+                  if (l != null) t.setOnClickListener(l);
+                  return t;
+              }
+
+              private View.OnClickListener stepper(final int delta) {
+                  return new View.OnClickListener() {
+                      @Override
+                      public void onClick(View v) {
+                          setDigits(digits + delta);
+                          postRender();
+                      }
+                  };
+              }
+
+              private View buildPanel() {
+                  LinearLayout p = new LinearLayout(this);
+                  p.setOrientation(LinearLayout.VERTICAL);
+                  p.setPadding(dp(2), dp(2), dp(2), dp(2));
+
+                  // \u0627\u0644\u0639\u0646\u0648\u0627\u0646 + \u0632\u0631 \u0627\u0644\u0631\u062c\u0648\u0639
+                  LinearLayout head = hrow();
+                  TextView title = new TextView(this);
+                  title.setText("\u2699  KenzO board");
+                  title.setTextColor(C_TEXT);
+                  title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+                  title.setGravity(Gravity.CENTER_VERTICAL);
+                  title.setPadding(dp(4), 0, 0, 0);
+                  head.addView(title, new LinearLayout.LayoutParams(0, MATCH, 1f));
+                  head.addView(cell("\u0631\u062c\u0648\u0639 \u2715", C_SPECIAL, 13, new View.OnClickListener() {
+                      @Override
+                      public void onClick(View v) {
+                          panelOpen = false;
+                          postRender();
+                      }
+                  }), cellParams(dp(90), MATCH, 0f));
+                  p.addView(head, new LinearLayout.LayoutParams(MATCH, dp(30)));
+
+                  // \u0627\u0644\u0623\u0632\u0631\u0627\u0631: \u0623\u062e\u0636\u0631 = \u0634\u063a\u0651\u0627\u0644 \u060c \u0631\u0645\u0627\u062f\u064a = \u0645\u0637\u0641\u064a
+                  LinearLayout toggles = hrow();
+                  toggles.addView(cell("\u0625\u0631\u0633\u0627\u0644\n\u0623\u0631\u0642\u0627\u0645", auto ? C_ON : C_SPECIAL, 10.5f, flip(K_AUTO)),
+                          cellParams(0, MATCH, 1f));
+                  toggles.addView(cell("\u0625\u0631\u0633\u0627\u0644\n\u062d\u0631\u0648\u0641", autoLetters ? C_ON : C_SPECIAL, 10.5f, flip(K_AUTOL)),
+                          cellParams(0, MATCH, 1f));
+                  toggles.addView(cell("\u062a\u0641\u0643\u064a\u0643", split ? C_ON : C_SPECIAL, 10.5f, flip(K_SPLIT)),
+                          cellParams(0, MATCH, 1f));
+                  toggles.addView(cell("\u0627\u0647\u062a\u0632\u0627\u0632", haptic ? C_ON : C_SPECIAL, 10.5f, flip(K_HAPTIC)),
+                          cellParams(0, MATCH, 1f));
+                  toggles.addView(cell("\u0641\u0643\u0651\u0643\n\u0622\u062e\u0631", C_SPECIAL, 10.5f, new View.OnClickListener() {
+                      @Override
+                      public void onClick(View v) {
+                          splitLastWord();
+                          panelOpen = false;
+                          postRender();
+                      }
+                  }), cellParams(0, MATCH, 1f));
+                  p.addView(toggles, new LinearLayout.LayoutParams(MATCH, dp(42)));
+
+                  // \u0639\u062f\u062f \u0627\u0644\u062d\u0631\u0648\u0641 + \u0645\u062f\u0629 \u0627\u0644\u062a\u0648\u0642\u0641
+                  LinearLayout opts = hrow();
+                  opts.addView(cell("-", C_SPECIAL, 16, letterStepper(-1)), cellParams(dp(30), MATCH, 0f));
+                  opts.addView(cell(letters + " \u062d\u0631\u0641", C_KEY, 12, null), cellParams(0, MATCH, 1f));
+                  opts.addView(cell("+", C_SPECIAL, 16, letterStepper(1)), cellParams(dp(30), MATCH, 0f));
+                  p.addView(opts, new LinearLayout.LayoutParams(MATCH, dp(34)));
+
+                  // \u0639\u062f\u062f \u0627\u0644\u062e\u0627\u0646\u0627\u062a
+                  LinearLayout step = hrow();
+                  step.addView(cell("-10", C_SPECIAL, 15, stepper(-10)), cellParams(0, MATCH, 1f));
+                  step.addView(cell("-1", C_SPECIAL, 15, stepper(-1)), cellParams(0, MATCH, 1f));
+                  TextView val = cell(digits + " \u062e\u0627\u0646\u0629  \u2022  " + unitName(digits), C_KEY, 14, null);
+                  step.addView(val, cellParams(0, MATCH, 3f));
+                  step.addView(cell("+1", C_SPECIAL, 15, stepper(1)), cellParams(0, MATCH, 1f));
+                  step.addView(cell("+10", C_SPECIAL, 15, stepper(10)), cellParams(0, MATCH, 1f));
+                  p.addView(step, new LinearLayout.LayoutParams(MATCH, dp(38)));
+
+                  // \u0627\u0644\u0645\u0631\u0627\u062a\u0628: \u0632\u0631 \u0644\u0643\u0644 \u0639\u062f\u062f \u062e\u0627\u0646\u0627\u062a \u0645\u0646 1 \u0625\u0644\u0649 101
+                  final ScrollView sv = new ScrollView(this);
+                  LinearLayout list = new LinearLayout(this);
+                  list.setOrientation(LinearLayout.VERTICAL);
+                  for (int n = 1; n <= MAX_DIGITS; n += 2) {
+                      LinearLayout r = hrow();
+                      r.addView(magCell(n), cellParams(0, MATCH, 1f));
+                      if (n + 1 <= MAX_DIGITS) {
+                          r.addView(magCell(n + 1), cellParams(0, MATCH, 1f));
+                      } else {
+                          r.addView(new View(this), cellParams(0, MATCH, 1f));
+                      }
+                      list.addView(r, new LinearLayout.LayoutParams(MATCH, dp(GRID_ROW_DP)));
+                  }
+                  sv.addView(list, new ViewGroup.LayoutParams(MATCH, ViewGroup.LayoutParams.WRAP_CONTENT));
+                  p.addView(sv, new LinearLayout.LayoutParams(MATCH, 0, 1f));
+
+                  final int target = Math.max(0, ((digits - 1) / 2) * dp(GRID_ROW_DP) - dp(GRID_ROW_DP));
+                  sv.post(new Runnable() {
+                      @Override
+                      public void run() {
+                          sv.scrollTo(0, target);
+                      }
+                  });
+                  return p;
+              }
+
+              private TextView magCell(final int n) {
+                  String label = unitName(n) + " \u2022 " + n + " \u062e\u0627\u0646\u0629";
+                  TextView t = cell(label, n == digits ? C_ON : C_SPECIAL, 13, new View.OnClickListener() {
+                      @Override
+                      public void onClick(View v) {
+                          setDigits(n);
+                          panelOpen = false;
+                          page = PAGE_NUM;
+                          postRender();
+                      }
+                  });
+                  t.setMaxLines(1);
+                  if (Build.VERSION.SDK_INT >= 26) {
+                      t.setAutoSizeTextTypeUniformWithConfiguration(8, 13, 1, TypedValue.COMPLEX_UNIT_SP);
+                  }
+                  return t;
+              }
+
+              private int dp(int v) {
+                  return (int) (v * getResources().getDisplayMetrics().density + 0.5f);
+              }
+          }
+          EOF_8
+          mkdir -p app/src/main/res/mipmap-xxxhdpi
+          base64 -d > app/src/main/res/mipmap-xxxhdpi/ic_launcher.png <<'EOF_ICON'
+          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
+          AeHP4L4mb6E1AAAAAElFTkSuQmCC
+          EOF_ICON
+          gradle assembleDebug --no-daemon --console=plain 2>&1 | tee ../build.log
+          cp app/build/outputs/apk/debug/app-debug.apk ../KenzOboard.apk
+      - name: Show errors
+        if: failure()
+        run: |
+          grep -E "error:|FAILED|What went wrong" -A4 build.log | head -60 >> "$GITHUB_STEP_SUMMARY" || true
+      - name: Publish APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "boardv6-${{ github.run_number }}" KenzOboard.apk --repo "$GITHUB_REPOSITORY" --title "KenzO board v6 (${{ github.run_number }})" --notes "APK" --target "${{ github.sha }}"
